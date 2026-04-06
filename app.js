@@ -1318,3 +1318,112 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     setLoginBusy(false);
   }
 });
+// 🔥 V2 PATCH START (kun ændringer – resten er din originale fil)
+
+// 1. Helper til at sikre dropdown findes
+function ensureAttendanceStatusField() {
+  if (!document.getElementById("attendanceStatusSelect")) {
+    const container = document.createElement("div");
+    container.style.marginTop = "10px";
+    container.innerHTML = `
+      <label>Status efter logeaften:</label><br>
+      <select id="attendanceStatusSelect">
+        <option value="unknown">Ikke sat</option>
+        <option value="present">Mødt</option>
+        <option value="no_show">No-show</option>
+        <option value="late_cancel">Sent afbud</option>
+        <option value="excused_absence">Gyldigt fravær</option>
+      </select>
+    `;
+
+    const target = document.getElementById("attendanceAdminGuestFields")?.parentElement;
+    if (target) {
+      target.appendChild(container);
+    }
+  }
+}
+
+// 2. Patch loadAdminAttendanceForm
+const originalLoadAdminAttendanceForm = loadAdminAttendanceForm;
+loadAdminAttendanceForm = function () {
+  originalLoadAdminAttendanceForm();
+
+  ensureAttendanceStatusField();
+
+  const event = getAdminSelectedEvent();
+  const member = getAdminSelectedMember();
+  if (!event || !member) return;
+
+  const record = getAttendanceRecord(member.id, event.id);
+
+  const select = document.getElementById("attendanceStatusSelect");
+  if (select) {
+    select.value = record?.attendance_status || "unknown";
+  }
+};
+
+// 3. Patch saveAttendanceAdminBtn
+const originalSaveHandler = $("saveAttendanceAdminBtn").onclick;
+
+$("saveAttendanceAdminBtn").onclick = async function () {
+  if (currentUser?.role !== "admin") {
+    showError("Kun admin kan ændre andre medlemmers tilmelding.");
+    return;
+  }
+
+  const event = getAdminSelectedEvent();
+  const member = getAdminSelectedMember();
+
+  if (!event || !member) {
+    showError("Vælg både logeaften og broder.");
+    return;
+  }
+
+  const attending = $("attendanceAdminAttending").checked;
+  const wantsFood = attending ? $("attendanceAdminWantsFood").checked : false;
+  const bringsGuest = attending ? $("attendanceAdminBringsGuest").checked : false;
+  const guestName = $("attendanceAdminGuestName").value.trim();
+  const guestWantsFood =
+    attending && bringsGuest ? $("attendanceAdminGuestWantsFood").checked : false;
+
+  if (bringsGuest && !guestName) {
+    showError("Skriv gæstens navn.");
+    return;
+  }
+
+  const attendanceStatus =
+    document.getElementById("attendanceStatusSelect")?.value || "unknown";
+
+  const payload = {
+    member_id: member.id,
+    event_id: event.id,
+    attending,
+    wants_food: wantsFood,
+    brings_guest: bringsGuest,
+    guest_name: bringsGuest ? guestName : null,
+    guest_wants_food: guestWantsFood,
+
+    // 🔥 NYT
+    attendance_status: attendanceStatus,
+    attendance_marked_at: new Date().toISOString(),
+    attendance_marked_by: currentUser.id
+  };
+
+  const { error } = await supabase
+    .from("absences")
+    .upsert(payload, { onConflict: "event_id,member_id" });
+
+  if (error) {
+    console.error(error);
+    showError("Kunne ikke gemme tilmeldingen.");
+    return;
+  }
+
+  await loadAllData();
+  renderAll();
+  await loadMyAttendanceIntoForm();
+  loadAdminAttendanceForm();
+  showMessage(`Tilmelding gemt for ${member.name}.`);
+};
+
+// 🔥 V2 PATCH SLUT
