@@ -317,31 +317,48 @@ function ensureAttendanceStatusField() {
 function ensureKitchenPanel() {
   if ($("kitchenPanel")) return;
 
+  const adminArea = $("adminArea");
   const appArea = $("appArea");
-  if (!appArea) return;
+  if (!adminArea && !appArea) return;
 
-  const section = document.createElement("section");
-  section.id = "kitchenPanel";
-  section.className = "card hidden";
-  section.innerHTML = `
-    <h2>Restauratør-overblik</h2>
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <details id="kitchenPanel" class="admin-section hidden">
+      <summary>Restauratør-overblik</summary>
+      <div class="admin-grid top-gap">
+        <div class="panel-box">
+          <div class="panel-content stack">
+            <label>
+              <div class="mini">Logeaften</div>
+              <select id="kitchenEventSelect" class="select"></select>
+            </label>
 
-    <div style="margin-bottom:12px;">
-      <label for="kitchenEventSelect">Logeaften</label><br>
-      <select id="kitchenEventSelect"></select>
-    </div>
+            <div id="kitchenSummaryBox" class="success-box"></div>
 
-    <div id="kitchenSummaryBox" class="success-box" style="margin-bottom:12px;"></div>
+            <div class="row">
+              <button id="copyKitchenTextBtn" class="btn secondary" type="button">Kopiér køkkentekst</button>
+              <button id="exportKitchenCsvBtn" class="btn secondary" type="button">Eksportér køkken-CSV</button>
+            </div>
+          </div>
+        </div>
 
-    <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
-      <button id="copyKitchenTextBtn" type="button">Kopiér køkkentekst</button>
-      <button id="exportKitchenCsvBtn" type="button">Eksportér køkken-CSV</button>
-    </div>
-
-    <div id="kitchenNamesBox"></div>
+        <div class="panel-box">
+          <div class="panel-content stack">
+            <div class="mini"><strong>Navneliste til køkken</strong></div>
+            <div id="kitchenNamesBox"></div>
+          </div>
+        </div>
+      </div>
+    </details>
   `;
 
-  appArea.prepend(section);
+  const panel = wrapper.firstElementChild;
+
+  if (adminArea) {
+    adminArea.appendChild(panel);
+  } else if (appArea) {
+    appArea.prepend(panel);
+  }
 
   $("kitchenEventSelect").addEventListener("change", () => {
     const selectedId = Number($("kitchenEventSelect").value);
@@ -393,6 +410,12 @@ function renderKitchenPanel() {
   panel.classList.toggle("hidden", !(isKitchen || isAdmin));
 
   if (!(isKitchen || isAdmin)) return;
+
+  if (isAdmin) {
+    panel.open = false;
+  } else if (isKitchen) {
+    panel.open = true;
+  }
 
   $("kitchenEventSelect").innerHTML = eventsCache
     .map((e) => `<option value="${e.id}">${e.title}</option>`)
@@ -458,11 +481,13 @@ function renderAuth() {
     $("currentUserText").textContent =
       `${currentUser.name} · ${roleLabel} · ${currentUser.email || ""}`;
     $("appArea").classList.remove("hidden");
+
     if (currentUser.role === "kitchen") {
       $("attendanceForm").classList.add("hidden");
     } else {
       $("attendanceForm").classList.remove("hidden");
     }
+
     $("lastUpdated").classList.remove("hidden");
     $("authHelperText").textContent = "Du er logget ind med din personlige konto.";
   } else {
@@ -478,6 +503,11 @@ function renderAuth() {
 
   if (currentUser?.role === "admin") {
     adminToggleBtn.classList.remove("hidden");
+    adminPanel.classList.add("hidden");
+  } else if (currentUser?.role === "kitchen") {
+    adminToggleBtn.classList.add("hidden");
+    adminPanel.classList.remove("hidden");
+    adminVisible = true;
   } else {
     adminToggleBtn.classList.add("hidden");
     adminPanel.classList.add("hidden");
@@ -762,9 +792,12 @@ function loadAdminAttendanceForm() {
 
 function renderAdmin() {
   const isAdmin = currentUser?.role === "admin";
-  $("adminArea").classList.toggle("hidden", !isAdmin);
-  $("adminPanel").classList.toggle("hidden", !isAdmin || !adminVisible);
+  const isKitchen = currentUser?.role === "kitchen";
 
+  $("adminArea").classList.toggle("hidden", !(isAdmin || isKitchen));
+  $("adminPanel").classList.toggle("hidden", isAdmin ? !adminVisible : !isKitchen);
+
+  if (!isAdmin && !isKitchen) return;
   if (!isAdmin) return;
 
   $("reminderDaysInput").value = settingsCache.reminder_days ?? 2;
