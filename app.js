@@ -17,6 +17,8 @@ let currentEvent = null;
 let membersCache = [];
 let eventsCache = [];
 let absencesCache = [];
+let kitchenOverviewCache = [];
+let kitchenAttendanceCache = [];
 let settingsCache = {
   reminder_days: 2,
   reminder_channel: "mail"
@@ -245,6 +247,199 @@ function buildReminderData(event) {
   };
 }
 
+function getKitchenOverviewForEvent(eventId) {
+  return kitchenOverviewCache.find((x) => x.event_id === eventId) || null;
+}
+
+function getKitchenAttendanceForEvent(eventId) {
+  return kitchenAttendanceCache.filter(
+    (x) => x.event_id === eventId && (x.wants_food || (x.brings_guest && x.guest_wants_food))
+  );
+}
+
+function buildKitchenText(eventId) {
+  const overview = getKitchenOverviewForEvent(eventId);
+  const rows = getKitchenAttendanceForEvent(eventId);
+
+  if (!overview) return "Ingen køkkendata fundet.";
+
+  const lines = [
+    `${overview.title}`,
+    `${formatDate(overview.date)} kl. ${overview.time || "19:00"}`,
+    overview.location || "",
+    "",
+    `Deltagere: ${overview.attending_count}`,
+    `Medlemmer med mad: ${overview.member_meals}`,
+    `Gæster: ${overview.guest_count}`,
+    `Gæster med mad: ${overview.guest_meals}`,
+    `Total kuverter: ${overview.total_meals}`,
+    "",
+    "Navneliste:"
+  ];
+
+  rows.forEach((row) => {
+    let line = `- ${row.member_name}`;
+
+    if (row.wants_food) line += " · mad";
+    if (row.brings_guest) {
+      line += ` · gæst: ${row.guest_name || "Ja"}`;
+      if (row.guest_wants_food) line += " (mad)";
+    }
+
+    lines.push(line);
+  });
+
+  return lines.join("\n");
+}
+
+function ensureAttendanceStatusField() {
+  if ($("attendanceStatusSelect")) return;
+
+  const guestFields = $("attendanceAdminGuestFields");
+  const target = guestFields?.parentElement || $("saveAttendanceAdminBtn")?.parentElement;
+  if (!target) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.style.marginTop = "10px";
+  wrapper.innerHTML = `
+    <label for="attendanceStatusSelect">Status efter logeaften</label><br>
+    <select id="attendanceStatusSelect">
+      <option value="unknown">Ikke sat</option>
+      <option value="present">Mødt</option>
+      <option value="no_show">No-show</option>
+      <option value="late_cancel">Sent afbud</option>
+      <option value="excused_absence">Gyldigt fravær</option>
+    </select>
+  `;
+  target.appendChild(wrapper);
+}
+
+function ensureKitchenPanel() {
+  if ($("kitchenPanel")) return;
+
+  const appArea = $("appArea");
+  if (!appArea) return;
+
+  const section = document.createElement("section");
+  section.id = "kitchenPanel";
+  section.className = "card hidden";
+  section.innerHTML = `
+    <h2>Restauratør-overblik</h2>
+
+    <div style="margin-bottom:12px;">
+      <label for="kitchenEventSelect">Logeaften</label><br>
+      <select id="kitchenEventSelect"></select>
+    </div>
+
+    <div id="kitchenSummaryBox" class="success-box" style="margin-bottom:12px;"></div>
+
+    <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="copyKitchenTextBtn" type="button">Kopiér køkkentekst</button>
+      <button id="exportKitchenCsvBtn" type="button">Eksportér køkken-CSV</button>
+    </div>
+
+    <div id="kitchenNamesBox"></div>
+  `;
+
+  appArea.prepend(section);
+
+  $("kitchenEventSelect").addEventListener("change", () => {
+    const selectedId = Number($("kitchenEventSelect").value);
+    const selectedEvent = eventsCache.find((e) => e.id === selectedId);
+    if (selectedEvent) currentEvent = selectedEvent;
+    renderAll();
+  });
+
+  $("copyKitchenTextBtn").addEventListener("click", async () => {
+    const eventId = Number($("kitchenEventSelect").value);
+    await copyToClipboard(buildKitchenText(eventId), "Køkkentekst kopieret.");
+  });
+
+  $("exportKitchenCsvBtn").addEventListener("click", () => {
+    const eventId = Number($("kitchenEventSelect").value);
+    const overview = getKitchenOverviewForEvent(eventId);
+    const rows = getKitchenAttendanceForEvent(eventId);
+
+    if (!overview) {
+      showError("Ingen køkkendata fundet.");
+      return;
+    }
+
+    const header = "Navn,Medlem mad,Gæst,Gæst med mad\n";
+    const csvRows = rows.map((row) => [
+      csvEscape(row.member_name || ""),
+      row.wants_food ? "Ja" : "Nej",
+      row.brings_guest ? csvEscape(row.guest_name || "Ja") : "",
+      row.guest_wants_food ? "Ja" : "Nej"
+    ].join(","));
+
+    downloadFile(
+      "koekkenoversigt.csv",
+      header + csvRows.join("\n"),
+      "text/csv;charset=utf-8;"
+    );
+  });
+}
+
+function renderKitchenPanel() {
+  ensureKitchenPanel();
+
+  const panel = $("kitchenPanel");
+  if (!panel) return;
+
+  const isKitchen = currentUser?.role === "kitchen";
+  const isAdmin = currentUser?.role === "admin";
+
+  panel.classList.toggle("hidden", !(isKitchen || isAdmin));
+
+  if (!(isKitchen || isAdmin)) return;
+
+  $("kitchenEventSelect").innerHTML = eventsCache
+    .map((e) => `<option value="${e.id}">${e.title}</option>`)
+    .join("");
+
+  if (currentEvent) {
+    $("kitchenEventSelect").value = String(currentEvent.id);
+  }
+
+  const eventId = Number($("kitchenEventSelect").value);
+  const overview = getKitchenOverviewForEvent(eventId);
+  const rows = getKitchenAttendanceForEvent(eventId);
+
+  if (!overview) {
+    $("kitchenSummaryBox").innerHTML = "Ingen køkkendata fundet.";
+    $("kitchenNamesBox").innerHTML = "";
+    return;
+  }
+
+  $("kitchenSummaryBox").innerHTML = `
+    <strong>${overview.title}</strong><br>
+    ${formatDate(overview.date)} kl. ${overview.time || "19:00"}<br>
+    ${overview.location || ""}<br><br>
+    Deltagere: ${overview.attending_count}<br>
+    Medlemmer med mad: ${overview.member_meals}<br>
+    Gæster: ${overview.guest_count}<br>
+    Gæster med mad: ${overview.guest_meals}<br>
+    <strong>Total kuverter: ${overview.total_meals}</strong>
+  `;
+
+  if (!rows.length) {
+    $("kitchenNamesBox").innerHTML = `<div class="empty">Ingen madtilmeldinger endnu.</div>`;
+    return;
+  }
+
+  $("kitchenNamesBox").innerHTML = rows.map((row) => {
+    let text = `${row.member_name}`;
+    if (row.wants_food) text += ` · mad`;
+    if (row.brings_guest) {
+      text += ` · gæst: ${row.guest_name || "Ja"}`;
+      if (row.guest_wants_food) text += ` (mad)`;
+    }
+
+    return `<div class="member"><div><div class="member-name">${text}</div></div></div>`;
+  }).join("");
+}
+
 function renderAuth() {
   const adminToggleBtn = $("adminToggleBtn");
   const adminPanel = $("adminPanel");
@@ -252,10 +447,22 @@ function renderAuth() {
   if (currentUser) {
     $("authLoggedOut").classList.add("hidden");
     $("authLoggedIn").classList.remove("hidden");
+
+    const roleLabel =
+      currentUser.role === "admin"
+        ? "Admin"
+        : currentUser.role === "kitchen"
+          ? "Restauratør"
+          : "Broder";
+
     $("currentUserText").textContent =
-      `${currentUser.name} · ${currentUser.role === "admin" ? "Admin" : "Broder"} · ${currentUser.email || ""}`;
+      `${currentUser.name} · ${roleLabel} · ${currentUser.email || ""}`;
     $("appArea").classList.remove("hidden");
-    $("attendanceForm").classList.remove("hidden");
+    if (currentUser.role === "kitchen") {
+      $("attendanceForm").classList.add("hidden");
+    } else {
+      $("attendanceForm").classList.remove("hidden");
+    }
     $("lastUpdated").classList.remove("hidden");
     $("authHelperText").textContent = "Du er logget ind med din personlige konto.";
   } else {
@@ -442,7 +649,7 @@ function renderMembers() {
 }
 
 function renderMemberAction() {
-  if (!currentUser || !currentEvent) return;
+  if (!currentUser || !currentEvent || currentUser.role === "kitchen") return;
 
   const absent = isAbsent(currentUser.id, currentEvent.id);
   const beforeDeadline = isBeforeDeadline(currentEvent);
@@ -513,6 +720,8 @@ function getAdminSelectedMember() {
 }
 
 function loadAdminAttendanceForm() {
+  ensureAttendanceStatusField();
+
   const event = getAdminSelectedEvent();
   const member = getAdminSelectedMember();
 
@@ -531,6 +740,8 @@ function loadAdminAttendanceForm() {
     $("attendanceAdminGuestName").value = "";
     $("attendanceAdminGuestWantsFood").checked = false;
     $("attendanceAdminGuestFields").classList.add("hidden");
+    const statusSelect = $("attendanceStatusSelect");
+    if (statusSelect) statusSelect.value = "unknown";
     return;
   }
 
@@ -542,6 +753,11 @@ function loadAdminAttendanceForm() {
     "hidden",
     !(attending && record.brings_guest === true)
   );
+
+  const statusSelect = $("attendanceStatusSelect");
+  if (statusSelect) {
+    statusSelect.value = record?.attendance_status || "unknown";
+  }
 }
 
 function renderAdmin() {
@@ -611,6 +827,7 @@ function renderAll() {
   renderMembers();
   renderMemberAction();
   renderAdmin();
+  renderKitchenPanel();
 }
 
 function resetAppStateAfterLogout() {
@@ -621,6 +838,8 @@ function resetAppStateAfterLogout() {
   membersCache = [];
   eventsCache = [];
   absencesCache = [];
+  kitchenOverviewCache = [];
+  kitchenAttendanceCache = [];
   settingsCache = {
     reminder_days: 2,
     reminder_channel: "mail"
@@ -632,30 +851,49 @@ function resetAppStateAfterLogout() {
 async function loadAllData() {
   clearMessages();
 
-  const settingsPromise = currentUser?.role === "admin"
+  const isAdmin = currentUser?.role === "admin";
+  const isKitchen = currentUser?.role === "kitchen";
+
+  const settingsPromise = isAdmin
     ? supabase.from("settings").select("*").limit(1).maybeSingle()
     : Promise.resolve({ data: null, error: null });
+
+  const kitchenOverviewPromise = (isAdmin || isKitchen)
+    ? supabase.from("kitchen_overview_detailed").select("*").order("date")
+    : Promise.resolve({ data: [], error: null });
+
+  const kitchenAttendancePromise = (isAdmin || isKitchen)
+    ? supabase.from("kitchen_attendance_list").select("*").order("date").order("member_name")
+    : Promise.resolve({ data: [], error: null });
 
   const [
     { data: members, error: membersError },
     { data: events, error: eventsError },
     { data: absences, error: absencesError },
-    { data: settings, error: settingsError }
+    { data: settings, error: settingsError },
+    { data: kitchenOverview, error: kitchenOverviewError },
+    { data: kitchenAttendance, error: kitchenAttendanceError }
   ] = await Promise.all([
     supabase.from("members_public").select("*").order("name"),
     supabase.from("events").select("*").order("date"),
     supabase.from("absences").select("*"),
-    settingsPromise
+    settingsPromise,
+    kitchenOverviewPromise,
+    kitchenAttendancePromise
   ]);
 
   if (membersError) throw membersError;
   if (eventsError) throw eventsError;
   if (absencesError) throw absencesError;
   if (settingsError) throw settingsError;
+  if (kitchenOverviewError) throw kitchenOverviewError;
+  if (kitchenAttendanceError) throw kitchenAttendanceError;
 
   membersCache = members || [];
   eventsCache = events || [];
   absencesCache = absences || [];
+  kitchenOverviewCache = kitchenOverview || [];
+  kitchenAttendanceCache = kitchenAttendance || [];
   if (settings) settingsCache = settings;
 
   if (!currentEvent && eventsCache.length > 0) {
@@ -1065,6 +1303,8 @@ $("saveAttendanceAdminBtn")?.addEventListener("click", async () => {
     return;
   }
 
+  const attendanceStatus = $("attendanceStatusSelect")?.value || "unknown";
+
   const payload = {
     member_id: member.id,
     event_id: event.id,
@@ -1072,7 +1312,10 @@ $("saveAttendanceAdminBtn")?.addEventListener("click", async () => {
     wants_food: wantsFood,
     brings_guest: bringsGuest,
     guest_name: bringsGuest ? guestName : null,
-    guest_wants_food: guestWantsFood
+    guest_wants_food: guestWantsFood,
+    attendance_status: attendanceStatus,
+    attendance_marked_at: new Date().toISOString(),
+    attendance_marked_by: currentUser.id
   };
 
   const { error } = await supabase
@@ -1318,112 +1561,3 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     setLoginBusy(false);
   }
 });
-// 🔥 V2 PATCH START (kun ændringer – resten er din originale fil)
-
-// 1. Helper til at sikre dropdown findes
-function ensureAttendanceStatusField() {
-  if (!document.getElementById("attendanceStatusSelect")) {
-    const container = document.createElement("div");
-    container.style.marginTop = "10px";
-    container.innerHTML = `
-      <label>Status efter logeaften:</label><br>
-      <select id="attendanceStatusSelect">
-        <option value="unknown">Ikke sat</option>
-        <option value="present">Mødt</option>
-        <option value="no_show">No-show</option>
-        <option value="late_cancel">Sent afbud</option>
-        <option value="excused_absence">Gyldigt fravær</option>
-      </select>
-    `;
-
-    const target = document.getElementById("attendanceAdminGuestFields")?.parentElement;
-    if (target) {
-      target.appendChild(container);
-    }
-  }
-}
-
-// 2. Patch loadAdminAttendanceForm
-const originalLoadAdminAttendanceForm = loadAdminAttendanceForm;
-loadAdminAttendanceForm = function () {
-  originalLoadAdminAttendanceForm();
-
-  ensureAttendanceStatusField();
-
-  const event = getAdminSelectedEvent();
-  const member = getAdminSelectedMember();
-  if (!event || !member) return;
-
-  const record = getAttendanceRecord(member.id, event.id);
-
-  const select = document.getElementById("attendanceStatusSelect");
-  if (select) {
-    select.value = record?.attendance_status || "unknown";
-  }
-};
-
-// 3. Patch saveAttendanceAdminBtn
-const originalSaveHandler = $("saveAttendanceAdminBtn").onclick;
-
-$("saveAttendanceAdminBtn").onclick = async function () {
-  if (currentUser?.role !== "admin") {
-    showError("Kun admin kan ændre andre medlemmers tilmelding.");
-    return;
-  }
-
-  const event = getAdminSelectedEvent();
-  const member = getAdminSelectedMember();
-
-  if (!event || !member) {
-    showError("Vælg både logeaften og broder.");
-    return;
-  }
-
-  const attending = $("attendanceAdminAttending").checked;
-  const wantsFood = attending ? $("attendanceAdminWantsFood").checked : false;
-  const bringsGuest = attending ? $("attendanceAdminBringsGuest").checked : false;
-  const guestName = $("attendanceAdminGuestName").value.trim();
-  const guestWantsFood =
-    attending && bringsGuest ? $("attendanceAdminGuestWantsFood").checked : false;
-
-  if (bringsGuest && !guestName) {
-    showError("Skriv gæstens navn.");
-    return;
-  }
-
-  const attendanceStatus =
-    document.getElementById("attendanceStatusSelect")?.value || "unknown";
-
-  const payload = {
-    member_id: member.id,
-    event_id: event.id,
-    attending,
-    wants_food: wantsFood,
-    brings_guest: bringsGuest,
-    guest_name: bringsGuest ? guestName : null,
-    guest_wants_food: guestWantsFood,
-
-    // 🔥 NYT
-    attendance_status: attendanceStatus,
-    attendance_marked_at: new Date().toISOString(),
-    attendance_marked_by: currentUser.id
-  };
-
-  const { error } = await supabase
-    .from("absences")
-    .upsert(payload, { onConflict: "event_id,member_id" });
-
-  if (error) {
-    console.error(error);
-    showError("Kunne ikke gemme tilmeldingen.");
-    return;
-  }
-
-  await loadAllData();
-  renderAll();
-  await loadMyAttendanceIntoForm();
-  loadAdminAttendanceForm();
-  showMessage(`Tilmelding gemt for ${member.name}.`);
-};
-
-// 🔥 V2 PATCH SLUT
