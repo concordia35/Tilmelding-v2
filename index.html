@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tilmelding til logeaftener</title>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+
+  <meta name="theme-color" content="#6f1d2a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Tilmelding" />
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>Tilmelding til logeaftener</h1>
+          <p>
+            Her kan du se kommende logeaftener, tilmelde dig og ændre din status.
+          </p>
+        </div>
+
+        <div class="login-box card">
+          <div id="authLoggedOut">
+            <h3>Log ind</h3>
+            <div class="stack">
+              <label>
+                <div class="mini">Email</div>
+                <input id="loginEmail" class="input" type="email" placeholder="navn@eksempel.dk" autocomplete="username email" />
+              </label>
+              <label>
+                <div class="mini">Personligt password</div>
+                <div class="row">
+                  <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+                  <button id="togglePasswordBtn" class="btn secondary" type="button" aria-label="Vis eller skjul password">Vis</button>
+                </div>
+              </label>
+              <div class="row">
+                <button id="loginBtn" class="btn" type="button">Log ind</button>
+                <button id="forgotPasswordBtn" class="btn secondary" type="button">Glemt password</button>
+              </div>
+              <div id="authHelperText" class="mini">
+                Log ind med din email og dit eget password.
+              </div>
+            </div>
+          </div>
+
+          <div id="authLoggedIn" class="hidden">
+            <h3>Aktiv bruger</h3>
+            <div id="currentUserText" class="mini"></div>
+            <div class="row top-gap">
+              <button id="adminToggleBtn" class="btn ghost hidden" type="button">Admin</button>
+              <button id="logoutBtn" class="btn secondary" type="button">Log ud</button>
+            </div>
+          </div>
+
+          <div id="passwordResetBox" class="hidden top-gap reset-box">
+            <h3>Skift password</h3>
+            <div class="stack">
+              <label>
+                <div class="mini">Nyt password</div>
+                <input id="newPassword" class="input" type="password" minlength="10" autocomplete="new-password" />
+              </label>
+              <label>
+                <div class="mini">Gentag nyt password</div>
+                <input id="confirmPassword" class="input" type="password" minlength="10" autocomplete="new-password" />
+              </label>
+              <button id="changePasswordBtn" class="btn" type="button">Gem nyt password</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="setupNotice" class="warning hidden"></div>
+    <div id="globalMessage" class="success-box hidden"></div>
+    <div id="globalError" class="warning hidden"></div>
+    <div id="lastUpdated" class="mini hidden"></div>
+
+    <section id="appArea" class="grid hidden">
+      <article class="card">
+        <div class="card-header">
+          <h2>Kommende logeaftener</h2>
+          <div class="muted">Vælg en logeaften for at se overblik og ændre din status.</div>
+        </div>
+        <div class="card-body">
+          <div id="eventList" class="event-list"></div>
+        </div>
+      </article>
+
+      <article id="overviewCard" class="card">
+        <div class="card-header">
+          <h2>Overblik</h2>
+          <div class="muted">Her ser du deltagelse og oplysninger for den valgte logeaften.</div>
+        </div>
+        <div class="card-body">
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">Forventet deltagelse</div>
+              <div id="attendingCount" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Meldt fra</div>
+              <div id="absentCount" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Samlet antal</div>
+              <div id="totalCount" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Spiser med</div>
+              <div id="mealsTotalStat" class="stat-value">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Frist for ændringer</div>
+              <div id="deadlineText" class="stat-value compact">–</div>
+            </div>
+          </div>
+
+          <div class="notice">
+            De fleste brødre er som udgangspunkt tilmeldt.
+            Hvis du ikke deltager, bedes du melde fra inden fristen.
+            Efter fristen kan kun Undermester ændre status.
+            Du har selv ansvar for at melde fra inden fristen. Ellers skal maden betales, også selvom du ikke møder op.
+          </div>
+
+          <div id="memberActionBox"></div>
+
+          <div id="quickActions" class="row top-gap hidden">
+            <button id="quickAttendBtn" class="btn" type="button">✅ Jeg deltager</button>
+            <button id="quickAbsentBtn" class="btn danger" type="button">❌ Jeg deltager ikke</button>
+          </div>
+
+          <div id="attendanceForm" class="panel-box hidden">
+            <h3>Min tilmelding</h3>
+            <div class="panel-content stack">
+              <label class="row">
+                <input id="attending" type="checkbox" />
+                <span class="mini">Jeg deltager</span>
+              </label>
+
+              <label class="row">
+                <input id="wantsFood" type="checkbox" />
+                <span class="mini">Jeg ønsker mad</span>
+              </label>
+
+              <label class="row">
+                <input id="bringsGuest" type="checkbox" />
+                <span class="mini">Jeg tager en gæst med</span>
+              </label>
+
+              <div id="guestFields" class="hidden stack">
+                <label>
+                  <div class="mini">Gæstens navn</div>
+                  <input id="guestName" class="input" type="text" placeholder="Skriv gæstens navn" />
+                </label>
+
+                <label class="row">
+                  <input id="guestWantsFood" type="checkbox" />
+                  <span class="mini">Gæst ønsker mad</span>
+                </label>
+              </div>
+
+              <div class="row">
+                <button id="saveBtn" class="btn" type="button">Gem min tilmelding</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="eventInfo" class="event-info"></div>
+
+          <div class="members">
+            <div class="member-box">
+              <h3>Deltager</h3>
+              <div id="attendingList" class="member-list"></div>
+            </div>
+
+            <div class="member-box">
+              <h3>Meldt fra / ikke tilmeldt</h3>
+              <div id="absentList" class="member-list"></div>
+            </div>
+          </div>
+
+          <div id="adminPanel" class="hidden">
+            <div id="adminArea" class="hidden">
+
+              <details class="admin-section">
+                <summary>Påmindelser</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Send påmindelse antal dage før</div>
+                        <input id="reminderDaysInput" class="input" type="number" min="0" max="14" />
+                      </label>
+                      <label>
+                        <div class="mini">Påmindelseskanal</div>
+                        <select id="reminderChannelInput" class="select">
+                          <option value="mail">Mail</option>
+                          <option value="sms">SMS</option>
+                          <option value="begge">Mail + SMS</option>
+                        </select>
+                      </label>
+                      <button id="saveReminderBtn" class="btn" type="button">Gem indstillinger</button>
+                    </div>
+                  </div>
+
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <div class="mini"><strong>Klar til påmindelse</strong></div>
+                      <div id="reminderPreview" class="mini">Ingen påmindelser klar endnu.</div>
+                      <div class="row">
+                        <button id="copyReminderBtn" class="btn secondary" type="button">Kopiér tekst</button>
+                        <button id="openReminderMailBtn" class="btn secondary" type="button">Åbn mail</button>
+                      </div>
+                      <div class="row">
+                        <button id="copyPhonesBtn" class="btn secondary" type="button">Kopiér telefonliste</button>
+                        <button id="exportReminderCsvBtn" class="btn secondary" type="button">Eksportér reminder CSV</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
+                <summary>Opret logeaften</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Titel</div>
+                        <input id="newEventTitle" class="input" type="text" placeholder="Fx Ordinær logeaften" />
+                      </label>
+                      <label>
+                        <div class="mini">Dato</div>
+                        <input id="newEventDate" class="input" type="date" />
+                      </label>
+                      <label>
+                        <div class="mini">Tid</div>
+                        <input id="newEventTime" class="input" type="time" value="19:00" />
+                      </label>
+                      <label>
+                        <div class="mini">Sted</div>
+                        <input id="newEventLocation" class="input" type="text" value="Frederiksgade 15, Slagelse" />
+                      </label>
+                      <label>
+                        <div class="mini">Frist for afmelding (dage før)</div>
+                        <input id="newEventDeadlineDays" class="input" type="number" min="0" max="14" value="2" />
+                      </label>
+                      <button id="addEventBtn" class="btn" type="button">Opret logeaften</button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
+                <summary>Rediger logeaften</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Vælg logeaften</div>
+                        <select id="eventAdminSelect" class="select"></select>
+                      </label>
+                      <label>
+                        <div class="mini">Titel</div>
+                        <input id="editEventTitle" class="input" type="text" placeholder="Fx Ordinær logeaften" />
+                      </label>
+                      <label>
+                        <div class="mini">Dato</div>
+                        <input id="editEventDate" class="input" type="date" />
+                      </label>
+                      <label>
+                        <div class="mini">Tid</div>
+                        <input id="editEventTime" class="input" type="time" />
+                      </label>
+                      <label>
+                        <div class="mini">Sted</div>
+                        <input id="editEventLocation" class="input" type="text" />
+                      </label>
+                      <label>
+                        <div class="mini">Frist for afmelding (dage før)</div>
+                        <input id="editEventDeadlineDays" class="input" type="number" min="0" max="14" />
+                      </label>
+                      <div class="row">
+                        <button id="saveEventBtn" class="btn" type="button">Gem logeaften</button>
+                        <button id="deleteEventBtn" class="btn danger" type="button">Slet logeaften</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
+                <summary>Medlemmer</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Vælg broder</div>
+                        <select id="memberAdminSelect" class="select"></select>
+                      </label>
+                      <label>
+                        <div class="mini">Mail</div>
+                        <input id="memberEmailInput" class="input" type="email" placeholder="navn@eksempel.dk" />
+                      </label>
+                      <label>
+                        <div class="mini">Telefon</div>
+                        <input id="memberPhoneInput" class="input" type="text" placeholder="12 34 56 78" />
+                      </label>
+                      <label class="row">
+                        <input id="memberOptInOnlyInput" type="checkbox" />
+                        <span class="mini">Ikke automatisk tilmeldt</span>
+                      </label>
+                      <label>
+                        <div class="mini">Rolle</div>
+                        <select id="memberRoleInput" class="select">
+                          <option value="member">Broder</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </label>
+                      <button id="saveMemberBtn" class="btn" type="button">Gem medlem</button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
+                <summary>Rediger tilmelding</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Logeaften</div>
+                        <select id="attendanceAdminEventSelect" class="select"></select>
+                      </label>
+
+                      <label>
+                        <div class="mini">Broder</div>
+                        <select id="attendanceAdminMemberSelect" class="select"></select>
+                      </label>
+
+                      <div id="attendanceAdminStatusText" class="mini">
+                        Vælg logeaften og broder for at redigere tilmeldingen.
+                      </div>
+
+                      <label class="row">
+                        <input id="attendanceAdminAttending" type="checkbox" />
+                        <span class="mini">Deltager</span>
+                      </label>
+
+                      <label class="row">
+                        <input id="attendanceAdminWantsFood" type="checkbox" />
+                        <span class="mini">Ønsker mad</span>
+                      </label>
+
+                      <label class="row">
+                        <input id="attendanceAdminBringsGuest" type="checkbox" />
+                        <span class="mini">Tager gæst med</span>
+                      </label>
+
+                      <div id="attendanceAdminGuestFields" class="hidden stack">
+                        <label>
+                          <div class="mini">Gæstens navn</div>
+                          <input id="attendanceAdminGuestName" class="input" type="text" placeholder="Skriv gæstens navn" />
+                        </label>
+
+                        <label class="row">
+                          <input id="attendanceAdminGuestWantsFood" type="checkbox" />
+                          <span class="mini">Gæst ønsker mad</span>
+                        </label>
+                      </div>
+
+                      <div class="row">
+                        <button id="saveAttendanceAdminBtn" class="btn" type="button">Gem tilmelding</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
+                <summary>Overblik og eksport</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <button id="refreshBtn" class="btn secondary" type="button">Opdatér data</button>
+                      <button id="exportBtn" class="btn secondary" type="button">Eksportér data som JSON</button>
+                      <button id="exportCsvBtn" class="btn secondary" type="button">Eksportér køkkenliste som CSV</button>
+                      <div class="mini">
+                        Sørg for, at <code>supabase-config.js</code> er udfyldt, og at Auth, RLS og <code>members.user_id</code> er sat op korrekt i Supabase.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <div class="mini">Mad til brødre: <strong id="mealsCount">0</strong></div>
+                      <div class="mini">Antal gæster: <strong id="guestCount">0</strong></div>
+                      <div class="mini">Mad til gæster: <strong id="guestMealsCount">0</strong></div>
+                      <div class="mini">Samlet antal kuverter: <strong id="totalMealsCount">0</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+            </div>
+          </div>
+
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="app.js"></script>
+
+  <script>
+    (function () {
+      if (!("serviceWorker" in navigator)) return;
+
+      window.addEventListener("load", async () => {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+
+          for (const registration of registrations) {
+            const sameAppScope = registration.scope.includes("/Tilmelding/");
+            if (!sameAppScope) continue;
+
+            const worker =
+              registration.active ||
+              registration.waiting ||
+              registration.installing;
+
+            const isCurrentWorker =
+              worker &&
+              worker.scriptURL &&
+              worker.scriptURL.includes("/Tilmelding/sw.js");
+
+            if (!isCurrentWorker) {
+              await registration.unregister();
+            }
+          }
+        } catch (err) {
+          console.warn("Kunne ikke rydde gamle service workers:", err);
+        }
+
+        try {
+          const registration = await navigator.serviceWorker.register("./sw.js?v=2026-04-04-1", {
+            scope: "./"
+          });
+
+          registration.update();
+        } catch (err) {
+          console.error("Service worker kunne ikke registreres:", err);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
