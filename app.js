@@ -341,12 +341,10 @@ function ensureKitchenPanel() {
         <button id="exportKitchenCsvBtn" class="btn secondary" type="button">Eksportér køkken-CSV</button>
       </div>
 
-      <div class="panel-box">
-        <div class="panel-content stack">
-          <div class="mini"><strong>Navneliste til køkken</strong></div>
-          <div id="kitchenNamesBox"></div>
-        </div>
-      </div>
+      <details class="member-box list-section">
+        <summary>Navneliste til køkken</summary>
+        <div id="kitchenNamesBox"></div>
+      </details>
     </div>
   `;
 
