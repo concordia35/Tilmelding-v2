@@ -462,3 +462,6 @@ code {
   .member, .panel-content { padding: 14px; }
   .event-btn { padding: 14px; }
 }
+.login-box .mini {
+  color: rgba(255,255,255,0.9);
+}
