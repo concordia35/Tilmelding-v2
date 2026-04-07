@@ -229,6 +229,41 @@ body {
   background: #fcfaf6;
 }
 
+.list-section summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  background: #fcfaf6;
+  border-bottom: 1px solid transparent;
+}
+
+.list-section summary::-webkit-details-marker { display: none; }
+
+.list-section summary::after {
+  content: "+";
+  float: right;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.list-section[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.list-section[open] summary::after {
+  content: "–";
+}
+
+#kitchenPanel {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 840px;
+  justify-self: center;
+}
+
 .panel-content { padding: 16px; }
 
 .member {
@@ -386,6 +421,11 @@ code {
 @media (max-width: 1024px) {
   .grid, .members, .stats, .admin-grid {
     grid-template-columns: 1fr;
+  }
+
+  #kitchenPanel {
+    grid-column: 1;
+    max-width: none;
   }
 
   .login-box {
