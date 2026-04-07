@@ -663,7 +663,7 @@ function renderMemberAction() {
     <div class="${boxClass}">
       <strong>${statusIcon} ${currentUser.name}</strong><br>
       ${absent ? "Du står aktuelt som ikke deltagende." : "Du står aktuelt som deltagende."}
-      ${currentUser.opt_in_only ? '<br><span class="mini">Denne broder er ikke automatisk tilmeldt som standard og skal selv melde sig til.</span>' : ""}
+      ${currentUser.opt_in_only ? '<br><span class="mini">Du er ikke automatisk tilmeldt som standard og skal selv melde dig til.</span>' : ""}
       ${!beforeDeadline ? '<br><span class="mini">Afmeldingsfristen er overskredet. Kun admin kan ændre efter fristen.</span>' : ""}
     </div>
   `;
