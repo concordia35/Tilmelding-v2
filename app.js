@@ -893,7 +893,12 @@ async function loadAllData() {
   if (kitchenAttendanceError) throw kitchenAttendanceError;
 
   membersCache = members || [];
-  eventsCache = events || [];
+ const now = new Date();
+
+eventsCache = (events || []).filter(event => {
+  const eventDate = new Date(`${event.date}T${event.time || "19:00"}:00`);
+  return eventDate >= now;
+});
   absencesCache = absences || [];
   kitchenOverviewCache = kitchenOverview || [];
   kitchenAttendanceCache = kitchenAttendance || [];
