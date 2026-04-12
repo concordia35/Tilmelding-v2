@@ -924,7 +924,7 @@ async function hydrateCurrentUserFromAuthUser(authUser) {
   }
 
   const { data: member, error: memberError } = await supabase
-    .from("members")
+    .from("members_public")
     .select("*")
     .eq("user_id", authUser.id)
     .maybeSingle();
