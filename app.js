@@ -1,10 +1,29 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
+const storage = {
+  getItem(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {}
+  },
+  removeItem(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {}
+  }
+};
 
 const supabase = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   {
     auth: {
+      storage,
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true
