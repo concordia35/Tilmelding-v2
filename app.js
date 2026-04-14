@@ -1,3 +1,6 @@
+const SUPABASE_URL = "https://xxxx.supabase.co";
+const SUPABASE_ANON_KEY = "din_anon_key";
+
 const storage = {
   getItem(key) {
     try {
