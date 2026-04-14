@@ -78,6 +78,10 @@ function formatDeadline(event) {
   );
 }
 
+function getEventDateTime(event) {
+  return new Date(`${event.date}T${event.time || "19:00"}:00`);
+}
+
 function getDeadlineDate(event) {
   const date = new Date(`${event.date}T${event.time || "19:00"}:00`);
   date.setDate(date.getDate() - (Number(event.deadline_days) || 0));
@@ -158,18 +162,11 @@ function getReminderCandidateEvent() {
   const reminderDays = Number(settingsCache.reminder_days ?? 2);
 
   const upcoming = eventsCache
-    .filter((event) => {
-      const eventDate = new Date(`${event.date}T${event.time || "19:00"}:00`);
-      return eventDate >= new Date();
-    })
-    .sort((a, b) => {
-      const aDate = new Date(`${a.date}T${a.time || "19:00"}:00`);
-      const bDate = new Date(`${b.date}T${b.time || "19:00"}:00`);
-      return aDate - bDate;
-    });
+    .filter((event) => getEventDateTime(event) >= new Date())
+    .sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
 
   const exactMatch = upcoming.find((event) => {
-    const eventDate = new Date(`${event.date}T${event.time || "19:00"}:00`);
+    const eventDate = getEventDateTime(event);
     return daysUntilDate(eventDate) === reminderDays;
   });
 
@@ -177,7 +174,7 @@ function getReminderCandidateEvent() {
 
   return (
     upcoming.find((event) => {
-      const eventDate = new Date(`${event.date}T${event.time || "19:00"}:00`);
+      const eventDate = getEventDateTime(event);
       const daysUntilEvent = daysUntilDate(eventDate);
       return daysUntilEvent >= 0 && daysUntilEvent <= reminderDays && isBeforeDeadline(event);
     }) || null
@@ -495,6 +492,16 @@ function renderEvents() {
     currentEvent = eventsCache[0];
   }
 
+  if (currentEvent) {
+    const refreshedCurrent = eventsCache.find((e) => e.id === currentEvent.id);
+    currentEvent = refreshedCurrent || eventsCache[0] || null;
+  }
+
+  if (!eventsCache.length) {
+    $("eventList").innerHTML = `<div class="empty">Ingen kommende logeaftener.</div>`;
+    return;
+  }
+
   eventsCache.forEach((event) => {
     const absent = getAbsentMembers(event.id).length;
     const attending = membersCache.length - absent;
@@ -544,7 +551,18 @@ function renderEvents() {
 }
 
 function renderStats() {
-  if (!currentEvent) return;
+  if (!currentEvent) {
+    if ($("attendingCount")) $("attendingCount").textContent = "0";
+    if ($("absentCount")) $("absentCount").textContent = "0";
+    if ($("totalCount")) $("totalCount").textContent = String(membersCache.length || 0);
+    if ($("deadlineText")) $("deadlineText").textContent = "–";
+    if ($("mealsCount")) $("mealsCount").textContent = "0";
+    if ($("guestCount")) $("guestCount").textContent = "0";
+    if ($("guestMealsCount")) $("guestMealsCount").textContent = "0";
+    if ($("totalMealsCount")) $("totalMealsCount").textContent = "0";
+    if ($("mealsTotalStat")) $("mealsTotalStat").textContent = "0";
+    return;
+  }
 
   const absentMembers = getAbsentMembers(currentEvent.id);
   const attendingMembers = getAttendingMembers(currentEvent.id);
@@ -594,7 +612,10 @@ function renderStats() {
 }
 
 function renderEventInfo() {
-  if (!currentEvent) return;
+  if (!currentEvent) {
+    $("eventInfo").innerHTML = `<div class="empty">Ingen kommende logeaften valgt.</div>`;
+    return;
+  }
 
   $("eventInfo").innerHTML = `
     <div style="font-size: 24px; font-weight: 800; margin-bottom: 6px;">${currentEvent.title}</div>
@@ -603,7 +624,11 @@ function renderEventInfo() {
 }
 
 function renderMembers() {
-  if (!currentEvent) return;
+  if (!currentEvent) {
+    $("attendingList").innerHTML = `<div class="empty">Ingen kommende logeaften valgt.</div>`;
+    $("absentList").innerHTML = `<div class="empty">Ingen kommende logeaften valgt.</div>`;
+    return;
+  }
 
   const attending = getAttendingMembers(currentEvent.id);
   const absent = getAbsentMembers(currentEvent.id);
@@ -652,7 +677,11 @@ function renderMembers() {
 }
 
 function renderMemberAction() {
-  if (!currentUser || !currentEvent) return;
+  if (!currentUser || !currentEvent) {
+    $("memberActionBox").innerHTML = "";
+    if ($("quickActions")) $("quickActions").classList.add("hidden");
+    return;
+  }
 
   const absent = isAbsent(currentUser.id, currentEvent.id);
   const beforeDeadline = isBeforeDeadline(currentEvent);
@@ -893,12 +922,12 @@ async function loadAllData() {
   if (kitchenAttendanceError) throw kitchenAttendanceError;
 
   membersCache = members || [];
- const now = new Date();
+  const now = new Date();
 
-eventsCache = (events || []).filter(event => {
-  const eventDate = new Date(`${event.date}T${event.time || "19:00"}:00`);
-  return eventDate >= now;
-});
+  eventsCache = (events || [])
+    .filter((event) => getEventDateTime(event) >= now)
+    .sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
+
   absencesCache = absences || [];
   kitchenOverviewCache = kitchenOverview || [];
   kitchenAttendanceCache = kitchenAttendance || [];
@@ -910,7 +939,7 @@ eventsCache = (events || []).filter(event => {
 
   if (currentEvent) {
     const refreshedCurrent = eventsCache.find((e) => e.id === currentEvent.id);
-    if (refreshedCurrent) currentEvent = refreshedCurrent;
+    currentEvent = refreshedCurrent || eventsCache[0] || null;
   }
 
   $("lastUpdated").textContent =
@@ -925,7 +954,7 @@ async function hydrateCurrentUserFromAuthUser(authUser) {
 
   const { data: member, error: memberError } = await supabase
     .from("members_public")
-    .select("*")
+    .select("id,name,email,phone,opt_in_only,role,user_id")
     .eq("user_id", authUser.id)
     .maybeSingle();
 
@@ -1538,6 +1567,7 @@ setInterval(async () => {
     renderAll();
     if (currentUser) {
       await loadMyAttendanceIntoForm();
+      $("setupNotice").classList.add("hidden");
     }
   } catch (err) {
     console.error(err);
