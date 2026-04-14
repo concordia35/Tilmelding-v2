@@ -740,7 +740,7 @@ async function loadAllData() {
     { data: absences, error: absencesError },
     { data: settings, error: settingsError }
   ] = await Promise.all([
-    supabase.from("members_public").select("*").order("name"),
+    supabase.from("members").select("id,name,email,phone,opt_in_only,role,user_id").order("name"),
     supabase.from("events").select("*").order("date"),
     supabase.from("absences").select("*"),
     settingsPromise
