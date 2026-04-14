@@ -17,8 +17,6 @@ let currentEvent = null;
 let membersCache = [];
 let eventsCache = [];
 let absencesCache = [];
-let kitchenOverviewCache = [];
-let kitchenAttendanceCache = [];
 let settingsCache = {
   reminder_days: 2,
   reminder_channel: "mail"
@@ -244,51 +242,6 @@ function buildReminderData(event) {
   };
 }
 
-function getKitchenOverviewForEvent(eventId) {
-  return kitchenOverviewCache.find((x) => x.event_id === eventId) || null;
-}
-
-function getKitchenAttendanceForEvent(eventId) {
-  return kitchenAttendanceCache.filter(
-    (x) => x.event_id === eventId && (x.wants_food || (x.brings_guest && x.guest_wants_food))
-  );
-}
-
-function buildKitchenText(eventId) {
-  const overview = getKitchenOverviewForEvent(eventId);
-  const rows = getKitchenAttendanceForEvent(eventId);
-
-  if (!overview) return "Ingen køkkendata fundet.";
-
-  const lines = [
-    `${overview.title}`,
-    `${formatDate(overview.date)} kl. ${overview.time || "19:00"}`,
-    overview.location || "",
-    "",
-    `Deltagere: ${overview.attending_count}`,
-    `Medlemmer med mad: ${overview.member_meals}`,
-    `Gæster: ${overview.guest_count}`,
-    `Gæster med mad: ${overview.guest_meals}`,
-    `Total kuverter: ${overview.total_meals}`,
-    "",
-    "Navneliste:"
-  ];
-
-  rows.forEach((row) => {
-    let line = `- ${row.member_name}`;
-
-    if (row.wants_food) line += " · mad";
-    if (row.brings_guest) {
-      line += ` · gæst: ${row.guest_name || "Ja"}`;
-      if (row.guest_wants_food) line += " (mad)";
-    }
-
-    lines.push(line);
-  });
-
-  return lines.join("\n");
-}
-
 function ensureAttendanceStatusField() {
   if ($("attendanceStatusSelect")) return;
 
@@ -311,136 +264,9 @@ function ensureAttendanceStatusField() {
   target.appendChild(wrapper);
 }
 
-function ensureKitchenPanel() {
-  if ($("kitchenPanel")) return;
-
-  const appArea = $("appArea");
-  if (!appArea) return;
-
-  const section = document.createElement("section");
-  section.id = "kitchenPanel";
-  section.className = "card hidden";
-  section.innerHTML = `
-    <div class="card-header">
-      <h2>Restauratør-overblik</h2>
-      <div class="muted">Køkkenoversigt for den valgte logeaften.</div>
-    </div>
-    <div class="card-body">
-      <div style="margin-bottom:12px;">
-        <label for="kitchenEventSelect">Logeaften</label><br>
-        <select id="kitchenEventSelect" class="select"></select>
-      </div>
-
-      <div id="kitchenSummaryBox" class="success-box" style="margin-bottom:12px;"></div>
-
-      <div class="row" style="margin-bottom:12px;">
-        <button id="copyKitchenTextBtn" class="btn secondary" type="button">Kopiér køkkentekst</button>
-        <button id="exportKitchenCsvBtn" class="btn secondary" type="button">Eksportér køkken-CSV</button>
-      </div>
-
-      <details class="member-box list-section">
-        <summary>Navneliste til køkken</summary>
-        <div id="kitchenNamesBox"></div>
-      </details>
-    </div>
-  `;
-
-  appArea.appendChild(section);
-
-  $("kitchenEventSelect").addEventListener("change", () => {
-    const selectedId = Number($("kitchenEventSelect").value);
-    const selectedEvent = eventsCache.find((e) => e.id === selectedId);
-    if (selectedEvent) currentEvent = selectedEvent;
-    renderAll();
-  });
-
-  $("copyKitchenTextBtn").addEventListener("click", async () => {
-    const eventId = Number($("kitchenEventSelect").value);
-    await copyToClipboard(buildKitchenText(eventId), "Køkkentekst kopieret.");
-  });
-
-  $("exportKitchenCsvBtn").addEventListener("click", () => {
-    const eventId = Number($("kitchenEventSelect").value);
-    const overview = getKitchenOverviewForEvent(eventId);
-    const rows = getKitchenAttendanceForEvent(eventId);
-
-    if (!overview) {
-      showError("Ingen køkkendata fundet.");
-      return;
-    }
-
-    const header = "Navn,Medlem mad,Gæst,Gæst med mad\n";
-    const csvRows = rows.map((row) => [
-      csvEscape(row.member_name || ""),
-      row.wants_food ? "Ja" : "Nej",
-      row.brings_guest ? csvEscape(row.guest_name || "Ja") : "",
-      row.guest_wants_food ? "Ja" : "Nej"
-    ].join(","));
-
-    downloadFile(
-      "koekkenoversigt.csv",
-      header + csvRows.join("\n"),
-      "text/csv;charset=utf-8;"
-    );
-  });
-}
-
 function renderKitchenPanel() {
-  ensureKitchenPanel();
-
   const panel = $("kitchenPanel");
-  if (!panel) return;
-
-  const isKitchen = currentUser?.role === "kitchen";
-
-  panel.classList.toggle("hidden", !isKitchen);
-
-  if (!isKitchen) return;
-
-  $("kitchenEventSelect").innerHTML = eventsCache
-    .map((e) => `<option value="${e.id}">${e.title}</option>`)
-    .join("");
-
-  if (currentEvent) {
-    $("kitchenEventSelect").value = String(currentEvent.id);
-  }
-
-  const eventId = Number($("kitchenEventSelect").value);
-  const overview = getKitchenOverviewForEvent(eventId);
-  const rows = getKitchenAttendanceForEvent(eventId);
-
-  if (!overview) {
-    $("kitchenSummaryBox").innerHTML = "Ingen køkkendata fundet.";
-    $("kitchenNamesBox").innerHTML = "";
-    return;
-  }
-
-  $("kitchenSummaryBox").innerHTML = `
-    <strong>${overview.title}</strong><br>
-    ${formatDate(overview.date)} kl. ${overview.time || "19:00"}<br>
-    ${overview.location || ""}<br><br>
-    Deltagere: ${overview.attending_count}<br>
-    Medlemmer med mad: ${overview.member_meals}<br>
-    Gæster: ${overview.guest_count}<br>
-    Gæster med mad: ${overview.guest_meals}<br>
-    <strong>Total kuverter: ${overview.total_meals}</strong>
-  `;
-
-  if (!rows.length) {
-    $("kitchenNamesBox").innerHTML = `<div class="empty">Ingen madtilmeldinger endnu.</div>`;
-    return;
-  }
-
-  $("kitchenNamesBox").innerHTML = rows.map((row) => {
-    let text = `${row.member_name}`;
-    if (row.wants_food) text += ` · mad`;
-    if (row.brings_guest) {
-      text += ` · gæst: ${row.guest_name || "Ja"}`;
-      if (row.guest_wants_food) text += ` (mad)`;
-    }
-
-    return `<div class="member"><div><div class="member-name">${text}</div></div></div>`;
-  }).join("");
+  if (panel) panel.classList.add("hidden");
 }
 
 function renderAuth() {
@@ -870,8 +696,6 @@ function resetAppStateAfterLogout() {
   membersCache = [];
   eventsCache = [];
   absencesCache = [];
-  kitchenOverviewCache = [];
-  kitchenAttendanceCache = [];
   settingsCache = {
     reminder_days: 2,
     reminder_channel: "mail"
@@ -884,42 +708,27 @@ async function loadAllData() {
   clearMessages();
 
   const isAdmin = currentUser?.role === "admin";
-  const isKitchen = currentUser?.role === "kitchen";
 
   const settingsPromise = isAdmin
     ? supabase.from("settings").select("*").limit(1).maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
-  const kitchenOverviewPromise = (isAdmin || isKitchen)
-    ? supabase.from("kitchen_overview_detailed").select("*").order("date")
-    : Promise.resolve({ data: [], error: null });
-
-  const kitchenAttendancePromise = (isAdmin || isKitchen)
-    ? supabase.from("kitchen_attendance_list").select("*").order("date").order("member_name")
-    : Promise.resolve({ data: [], error: null });
-
   const [
     { data: members, error: membersError },
     { data: events, error: eventsError },
     { data: absences, error: absencesError },
-    { data: settings, error: settingsError },
-    { data: kitchenOverview, error: kitchenOverviewError },
-    { data: kitchenAttendance, error: kitchenAttendanceError }
+    { data: settings, error: settingsError }
   ] = await Promise.all([
     supabase.from("members_public").select("*").order("name"),
     supabase.from("events").select("*").order("date"),
     supabase.from("absences").select("*"),
-    settingsPromise,
-    kitchenOverviewPromise,
-    kitchenAttendancePromise
+    settingsPromise
   ]);
 
   if (membersError) throw membersError;
   if (eventsError) throw eventsError;
   if (absencesError) throw absencesError;
   if (settingsError) throw settingsError;
-  if (kitchenOverviewError) throw kitchenOverviewError;
-  if (kitchenAttendanceError) throw kitchenAttendanceError;
 
   membersCache = members || [];
   const now = new Date();
@@ -929,8 +738,6 @@ async function loadAllData() {
     .sort((a, b) => getEventDateTime(a) - getEventDateTime(b));
 
   absencesCache = absences || [];
-  kitchenOverviewCache = kitchenOverview || [];
-  kitchenAttendanceCache = kitchenAttendance || [];
   if (settings) settingsCache = settings;
 
   if (!currentEvent && eventsCache.length > 0) {
@@ -1056,34 +863,6 @@ async function quickSetAttendance(attending) {
   renderAll();
   await loadMyAttendanceIntoForm();
   showMessage(attending ? "Du er nu markeret som deltagende." : "Du er nu markeret som ikke deltagende.");
-}
-
-function exportKitchenCsv() {
-  if (!currentEvent) {
-    showError("Vælg en logeaften først.");
-    return;
-  }
-
-  const header = "Navn,Deltager,Mad,Gæst,Gæst med mad\n";
-  const rows = membersCache.map((member) => {
-    const record = getAttendanceRecord(member.id, currentEvent.id);
-    const attending = !isAbsent(member.id, currentEvent.id);
-    const wantsFood = attending
-      ? (record ? record.wants_food !== false : !member.opt_in_only)
-      : false;
-    const guest = attending && record?.brings_guest ? record?.guest_name || "Ja" : "";
-    const guestFood = attending && record?.guest_wants_food === true;
-
-    return [
-      csvEscape(member.name || ""),
-      attending ? "Ja" : "Nej",
-      wantsFood ? "Ja" : "Nej",
-      csvEscape(guest),
-      guestFood ? "Ja" : "Nej"
-    ].join(",");
-  });
-
-  downloadFile("koekkenliste.csv", header + rows.join("\n"), "text/csv;charset=utf-8;");
 }
 
 $("loginBtn").addEventListener("click", async () => {
@@ -1273,8 +1052,6 @@ $("exportBtn")?.addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-
-$("exportCsvBtn")?.addEventListener("click", exportKitchenCsv);
 
 $("eventAdminSelect")?.addEventListener("change", fillEventEditForm);
 $("memberAdminSelect")?.addEventListener("change", fillMemberEditForm);
