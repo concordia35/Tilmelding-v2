@@ -4,13 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tilmelding til logeaftener</title>
-  <link rel="stylesheet" href="style.css" />
 
-  <!-- PWA -->
-  <link rel="manifest" href="/Tilmelding/manifest.webmanifest">
-  <meta name="theme-color" content="#6f1d2a">
-  <link rel="icon" href="/Tilmelding/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/Tilmelding/icons/icon-192.png">
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+
+  <meta name="theme-color" content="#6f1d2a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Tilmelding" />
 </head>
 <body>
   <div class="wrap">
@@ -28,25 +31,22 @@
             <h3>Log ind</h3>
             <div class="stack">
               <label>
-                <div class="mini">Fulde navn</div>
-                <input id="loginFullName" class="input" type="text" placeholder="Fx Lars Møller Andersen" />
+                <div class="mini">Email</div>
+                <input id="loginEmail" class="input" type="email" placeholder="navn@eksempel.dk" autocomplete="username email" />
               </label>
               <label>
-                <div class="mini">Fælles adgangskode</div>
+                <div class="mini">Personligt password</div>
                 <div class="row">
-                  <input id="loginPassword" class="input" type="password" placeholder="••••••••" />
+                  <input id="loginPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
                   <button id="togglePasswordBtn" class="btn secondary" type="button" aria-label="Vis eller skjul password">Vis</button>
                 </div>
               </label>
-              <label class="row">
-                <input id="rememberLogin" type="checkbox" checked />
-                <span class="mini">Husk login på denne enhed</span>
-              </label>
               <div class="row">
                 <button id="loginBtn" class="btn" type="button">Log ind</button>
+                <button id="forgotPasswordBtn" class="btn secondary" type="button">Glemt password</button>
               </div>
-              <div class="mini">
-                Indtast dit fulde navn og den fælles adgangskode for at åbne oversigten.
+              <div id="authHelperText" class="mini">
+                Log ind med din email og dit eget password.
               </div>
             </div>
           </div>
@@ -57,6 +57,21 @@
             <div class="row top-gap">
               <button id="adminToggleBtn" class="btn ghost hidden" type="button">Admin</button>
               <button id="logoutBtn" class="btn secondary" type="button">Log ud</button>
+            </div>
+          </div>
+
+          <div id="passwordResetBox" class="hidden top-gap reset-box">
+            <h3>Skift password</h3>
+            <div class="stack">
+              <label>
+                <div class="mini">Nyt password</div>
+                <input id="newPassword" class="input" type="password" minlength="10" autocomplete="new-password" />
+              </label>
+              <label>
+                <div class="mini">Gentag nyt password</div>
+                <input id="confirmPassword" class="input" type="password" minlength="10" autocomplete="new-password" />
+              </label>
+              <button id="changePasswordBtn" class="btn" type="button">Gem nyt password</button>
             </div>
           </div>
         </div>
@@ -79,7 +94,7 @@
         </div>
       </article>
 
-      <article class="card">
+      <article id="overviewCard" class="card">
         <div class="card-header">
           <h2>Overblik</h2>
           <div class="muted">Her ser du deltagelse og oplysninger for den valgte logeaften.</div>
@@ -99,6 +114,10 @@
               <div id="totalCount" class="stat-value">0</div>
             </div>
             <div class="stat">
+              <div class="stat-label">Spiser med</div>
+              <div id="mealsTotalStat" class="stat-value">0</div>
+            </div>
+            <div class="stat">
               <div class="stat-label">Frist for ændringer</div>
               <div id="deadlineText" class="stat-value compact">–</div>
             </div>
@@ -107,7 +126,8 @@
           <div class="notice">
             De fleste brødre er som udgangspunkt tilmeldt.
             Hvis du ikke deltager, bedes du melde fra inden fristen.
-            Efter fristen kan kun admin ændre status.
+            Efter fristen kan kun Undermester ændre status.
+            Du har selv ansvar for at melde fra inden fristen. Ellers skal maden betales, også selvom du ikke møder op.
           </div>
 
           <div id="memberActionBox"></div>
@@ -167,6 +187,8 @@
             </div>
           </div>
 
+          <div id="kitchenPanel" class="hidden"></div>
+
           <div id="adminPanel" class="hidden">
             <div id="adminArea" class="hidden">
 
@@ -186,10 +208,6 @@
                           <option value="sms">SMS</option>
                           <option value="begge">Mail + SMS</option>
                         </select>
-                      </label>
-                      <label>
-                        <div class="mini">Fælles adgangskode</div>
-                        <input id="sharedPasswordInput" class="input" type="text" placeholder="Fælles adgangskode" />
                       </label>
                       <button id="saveReminderBtn" class="btn" type="button">Gem indstillinger</button>
                     </div>
@@ -316,15 +334,68 @@
               </details>
 
               <details class="admin-section">
+                <summary>Rediger tilmelding</summary>
+                <div class="admin-grid top-gap">
+                  <div class="panel-box">
+                    <div class="panel-content stack">
+                      <label>
+                        <div class="mini">Logeaften</div>
+                        <select id="attendanceAdminEventSelect" class="select"></select>
+                      </label>
+
+                      <label>
+                        <div class="mini">Broder</div>
+                        <select id="attendanceAdminMemberSelect" class="select"></select>
+                      </label>
+
+                      <div id="attendanceAdminStatusText" class="mini">
+                        Vælg logeaften og broder for at redigere tilmeldingen.
+                      </div>
+
+                      <label class="row">
+                        <input id="attendanceAdminAttending" type="checkbox" />
+                        <span class="mini">Deltager</span>
+                      </label>
+
+                      <label class="row">
+                        <input id="attendanceAdminWantsFood" type="checkbox" />
+                        <span class="mini">Ønsker mad</span>
+                      </label>
+
+                      <label class="row">
+                        <input id="attendanceAdminBringsGuest" type="checkbox" />
+                        <span class="mini">Tager gæst med</span>
+                      </label>
+
+                      <div id="attendanceAdminGuestFields" class="hidden stack">
+                        <label>
+                          <div class="mini">Gæstens navn</div>
+                          <input id="attendanceAdminGuestName" class="input" type="text" placeholder="Skriv gæstens navn" />
+                        </label>
+
+                        <label class="row">
+                          <input id="attendanceAdminGuestWantsFood" type="checkbox" />
+                          <span class="mini">Gæst ønsker mad</span>
+                        </label>
+                      </div>
+
+                      <div class="row">
+                        <button id="saveAttendanceAdminBtn" class="btn" type="button">Gem tilmelding</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="admin-section">
                 <summary>Overblik og eksport</summary>
                 <div class="admin-grid top-gap">
                   <div class="panel-box">
                     <div class="panel-content stack">
                       <button id="refreshBtn" class="btn secondary" type="button">Opdatér data</button>
                       <button id="exportBtn" class="btn secondary" type="button">Eksportér data som JSON</button>
-                      <button id="exportCsvBtn" class="btn secondary" type="button">Eksportér køkkenliste som CSV</button>
-                      <div class="mini">
-                        Sørg for, at <code>supabase-config.js</code> er udfyldt, og at tabeller samt policies er oprettet korrekt i Supabase.
+                                            <div class="mini">
+                        Sørg for, at <code>supabase-config.js</code> er udfyldt, og at Auth, RLS og <code>members.user_id</code> er sat op korrekt i Supabase.
                       </div>
                     </div>
                   </div>
@@ -350,5 +421,48 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="app.js"></script>
+
+  <script>
+    (function () {
+      if (!("serviceWorker" in navigator)) return;
+
+      window.addEventListener("load", async () => {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+
+          for (const registration of registrations) {
+            const sameAppScope = registration.scope.includes("/Tilmelding/");
+            if (!sameAppScope) continue;
+
+            const worker =
+              registration.active ||
+              registration.waiting ||
+              registration.installing;
+
+            const isCurrentWorker =
+              worker &&
+              worker.scriptURL &&
+              worker.scriptURL.includes("/Tilmelding/sw.js");
+
+            if (!isCurrentWorker) {
+              await registration.unregister();
+            }
+          }
+        } catch (err) {
+          console.warn("Kunne ikke rydde gamle service workers:", err);
+        }
+
+        try {
+          const registration = await navigator.serviceWorker.register("./sw.js?v=2026-04-04-1", {
+            scope: "./"
+          });
+
+          registration.update();
+        } catch (err) {
+          console.error("Service worker kunne ikke registreres:", err);
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
