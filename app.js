@@ -1,5 +1,4 @@
-const SUPABASE_URL = "https://xxxx.supabase.co";
-const SUPABASE_ANON_KEY = "din_anon_key";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase-config.js";
 
 const storage = {
   getItem(key) {
