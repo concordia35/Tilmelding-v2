@@ -229,6 +229,34 @@ body {
   background: #fcfaf6;
 }
 
+.member-box.list-section > summary {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 16px;
+  background: #fcfaf6;
+  border-bottom: 1px solid transparent;
+  list-style: none;
+  cursor: pointer;
+}
+
+.member-box.list-section > summary::-webkit-details-marker { display: none; }
+
+.member-box.list-section > summary::after {
+  content: "+";
+  float: right;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.member-box.list-section[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.member-box.list-section[open] > summary::after {
+  content: "–";
+}
+
 .list-section summary {
   list-style: none;
   cursor: pointer;
